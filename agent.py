@@ -1,44 +1,64 @@
-from langchain.agents import initialize_agent, Tool
-from langchain_community.llms import Ollama
-from langchain.tools import DuckDuckGoSearchRun
+import requests
+from duckduckgo_search import DDGS
 
-# LLM (локальный!)
-llm = Ollama(model="llama3")
+# ===== LLM (Ollama) =====
+def ask_llm(prompt: str) -> str:
+    response = requests.post(
+        "http://localhost:11434/api/generate",
+        json={
+            "model": "llama3",
+            "prompt": prompt,
+            "stream": False
+        }
+    )
+    return response.json()["response"]
 
-# Поиск
-search = DuckDuckGoSearchRun()
 
-# Калькулятор
-def calculator_tool(query: str):
+# ===== Tools =====
+def search(query: str):
+    with DDGS() as ddgs:
+        results = ddgs.text(query, max_results=3)
+        return "\n".join([r["title"] + " - " + r["href"] for r in results])
+
+
+def calculator(expr: str):
     try:
-        return str(eval(query))
+        return str(eval(expr))
     except Exception as e:
         return f"Ошибка: {e}"
 
-tools = [
-    Tool(
-        name="Search",
-        func=search.run,
-        description="Поиск в интернете"
-    ),
-    Tool(
-        name="Calculator",
-        func=calculator_tool,
-        description="Математика"
-    )
-]
 
-agent = initialize_agent(
-    tools,
-    llm,
-    agent="zero-shot-react-description",
-    verbose=True
-)
+# ===== Agent logic =====
+def agent(user_input: str):
+    prompt = f"""
+Ты ИИ-агент. У тебя есть инструменты:
 
+1. search(query) - поиск в интернете
+2. calculator(expr) - математика
+
+Если нужно использовать инструмент — скажи КОРОТКО что сделать.
+
+Вопрос пользователя:
+{user_input}
+
+Ответ:
+"""
+    decision = ask_llm(prompt)
+
+    # простая логика маршрутизации
+    if "search" in decision.lower():
+        return search(user_input)
+
+    if "calculator" in decision.lower():
+        return calculator(user_input)
+
+    return decision
+
+
+# ===== Run loop =====
 while True:
     user_input = input("Ты: ")
     if user_input.lower() == "exit":
         break
-    
-    response = agent.run(user_input)
-    print("Агент:", response)
+
+    print("Агент:", agent(user_input))
