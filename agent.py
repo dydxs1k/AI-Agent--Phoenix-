@@ -56,6 +56,7 @@ def agent(user_input: str):
 
 
 # ===== Run loop =====
+print('Я ИИ-помощник "Феникс". Слушаю ваш вопрос.')
 while True:
     user_input = input("Ты: ")
     if user_input.lower() == "exit":
