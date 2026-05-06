@@ -1,7 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════╗
-║                   ИИ-АГЕНТ «ФЕНИКС» v0.2                 ║
-║  ✦ Память  ✦ Multi-step  ✦ Web+File  ✦ Parallel  ✦ JSON  ║
+║         ИИ-АГЕНТ «ФЕНИКС» v0.2 — Enhanced Edition       ║
+║  ✦ Память  ✦ Multi-step  ✦ Web+File  ✦ Parallel  ✦ JSON ║
 ╚══════════════════════════════════════════════════════════╝
 """
 
@@ -20,7 +20,148 @@ from duckduckgo_search import DDGS
 
 
 # ═══════════════════════════════════════════════════════════
-#ПАМЯТЬ (ConversationMemory)
+# ПРОФИЛЬ АГЕНТА  (AgentProfile)
+# ═══════════════════════════════════════════════════════════
+
+# Поля профиля: (ключ, отображаемое название, описание для подсказки)
+PROFILE_FIELDS: list[tuple[str, str, str]] = [
+    ("name",        "Имя",           "Как зовут агента?"),
+    ("version",     "Версия",        "Версия агента (напр. 2.0)"),
+    ("description", "Описание",      "Краткое описание — чем занимается агент"),
+    ("author",      "Автор",         "Кто создал агента?"),
+    ("language",    "Язык",          "Основной язык общения"),
+    ("personality", "Характер",      "Стиль поведения / тон общения"),
+    ("skills",      "Умения",        "Список ключевых навыков через запятую"),
+    ("motto",       "Девиз",         "Любимая фраза или девиз агента"),
+]
+
+DEFAULT_PROFILE: dict = {
+    "name":        "Феникс",
+    "version":     "0.2",
+    "description": "Умный ИИ-агент с памятью, многошаговым рассуждением и параллельными инструментами",
+    "author":      "Дима Кузьменко, также известен как Дед либо DyDxS1k/The Disgraced One.",
+    "language":    "Русский/Украинский",
+    "personality": "Дружелюбный, точный, инициативный",
+    "skills":      "Поиск в интернете, вычисления, чтение и запись файлов, многошаговое рассуждение",
+    "motto":       "Думаю, действую, запоминаю. В случае ошибки улучшаюсь.",
+}
+
+PROFILE_PATH = Path("agent_profile.json")
+
+
+class AgentProfile:
+    """Профиль агента — загружается из файла, сохраняется обратно."""
+
+    def __init__(self, path: Path = PROFILE_PATH):
+        self.path = path
+        self.data: dict = self._load()
+
+    # ── I/O ─────────────────────────────────────────────────
+    def _load(self) -> dict:
+        if self.path.exists():
+            try:
+                loaded = json.loads(self.path.read_text(encoding="utf-8"))
+                # дополняем дефолтными значениями, если каких-то полей нет
+                return {**DEFAULT_PROFILE, **loaded}
+            except Exception:
+                pass
+        return dict(DEFAULT_PROFILE)
+
+    def save(self) -> None:
+        self.path.write_text(
+            json.dumps(self.data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    # ── публичный API ────────────────────────────────────────
+    def get(self, key: str) -> str:
+        return self.data.get(key, "—")
+
+    def set(self, key: str, value: str) -> None:
+        self.data[key] = value.strip()
+        self.save()
+
+    def display(self) -> None:
+        """Красивый вывод всей карточки профиля."""
+        w = 56
+        print()
+        print("  ╔" + "═" * w + "╗")
+        print(f"  ║{'🤖  КАРТОЧКА АГЕНТА':^{w}}║")
+        print("  ╠" + "═" * w + "╣")
+        for key, label, _ in PROFILE_FIELDS:
+            val = self.data.get(key, "—")
+            # обрезаем длинные строки с многоточием
+            max_val = w - len(label) - 5
+            if len(val) > max_val:
+                val = val[:max_val - 1] + "…"
+            line = f"  {label}: {val}"
+            print(f"  ║  \033[1;33m{label}\033[0m: {val:<{w - len(label) - 4}}║")
+        print("  ╠" + "═" * w + "╣")
+        print(f"  ║  \033[90mФайл профиля: {str(PROFILE_PATH):<{w - 16}}\033[0m║")
+        print("  ╚" + "═" * w + "╝")
+        print()
+
+    def edit_interactive(self) -> None:
+        """Интерактивный редактор полей профиля."""
+        print()
+        print("  \033[1;36m✏️  Редактор профиля\033[0m  "
+              "(Enter — оставить без изменений, 'q' — выйти)\n")
+
+        for i, (key, label, hint) in enumerate(PROFILE_FIELDS, 1):
+            current = self.data.get(key, "")
+            try:
+                print(f"  \033[90m[{i}/{len(PROFILE_FIELDS)}]\033[0m "
+                      f"\033[1m{label}\033[0m  \033[90m({hint})\033[0m")
+                print(f"  Сейчас: \033[33m{current}\033[0m")
+                new_val = input("  Новое значение: ").strip()
+            except (KeyboardInterrupt, EOFError):
+                print("\n  ⚠️  Редактирование прервано.")
+                break
+
+            if new_val.lower() == "q":
+                print("  ✋ Выход из редактора.")
+                break
+            if new_val:
+                self.set(key, new_val)
+                print(f"  \033[32m✔ Сохранено\033[0m\n")
+            else:
+                print(f"  \033[90m— без изменений\033[0m\n")
+
+        print("  \033[1;32m💾 Профиль сохранён.\033[0m")
+        self.display()
+
+    def edit_field_interactive(self, field_hint: str) -> None:
+        """Редактировать одно поле по части его имени или ключа."""
+        field_hint_lower = field_hint.lower()
+        match = None
+        for key, label, hint in PROFILE_FIELDS:
+            if field_hint_lower in key.lower() or field_hint_lower in label.lower():
+                match = (key, label, hint)
+                break
+
+        if match is None:
+            keys = ", ".join(k for k, _, _ in PROFILE_FIELDS)
+            print(f"  ⚠️  Поле «{field_hint}» не найдено. Доступные: {keys}")
+            return
+
+        key, label, hint = match
+        current = self.data.get(key, "")
+        print(f"\n  Редактируем: \033[1m{label}\033[0m  \033[90m({hint})\033[0m")
+        print(f"  Сейчас: \033[33m{current}\033[0m")
+        try:
+            new_val = input("  Новое значение: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\n  ✋ Отменено.")
+            return
+        if new_val:
+            self.set(key, new_val)
+            print(f"  \033[32m✔ «{label}» обновлено → {new_val}\033[0m")
+        else:
+            print("  — без изменений")
+
+
+# ═══════════════════════════════════════════════════════════
+# 1. ПАМЯТЬ (ConversationMemory)
 # ═══════════════════════════════════════════════════════════
 
 class ConversationMemory:
@@ -125,7 +266,7 @@ def tool_write_file(path: str, content: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-#Реестр инструментов ─────────────────────────────────────
+# ── Реестр инструментов ─────────────────────────────────────
 TOOLS: dict[str, callable] = {
     "calculator":  tool_calculator,
     "search":      tool_search,
@@ -145,7 +286,7 @@ TOOLS_SCHEMA = """
 
 
 # ═══════════════════════════════════════════════════════════
-# ПАРАЛЛЕЛЬНЫЙ ЗАПУСК ИНСТРУМЕНТОВ
+# 4. ПАРАЛЛЕЛЬНЫЙ ЗАПУСК ИНСТРУМЕНТОВ
 # ═══════════════════════════════════════════════════════════
 
 def run_tools_parallel(calls: list[dict]) -> list[dict]:
@@ -197,7 +338,7 @@ def ask_llm(prompt: str, system: str = "") -> str:
 
 
 # ═══════════════════════════════════════════════════════════
-# JSON-ПАРСЕР ОТВЕТОВ LLM
+# 5. JSON-ПАРСЕР ОТВЕТОВ LLM
 # ═══════════════════════════════════════════════════════════
 
 def parse_json_response(raw: str) -> dict | None:
@@ -221,7 +362,7 @@ def parse_json_response(raw: str) -> dict | None:
 
 
 # ═══════════════════════════════════════════════════════════
-# MULTI-STEP REASONING  (ReAct-цикл)
+# 2. MULTI-STEP REASONING  (ReAct-цикл)
 # ═══════════════════════════════════════════════════════════
 
 SYSTEM_PROMPT = f"""Ты — ИИ-агент «Феникс». Ты рассуждаешь пошагово и вызываешь инструменты.
@@ -253,7 +394,7 @@ def agent(user_input: str, memory: ConversationMemory, max_steps: int = 5) -> st
     accumulated_results: list[dict] = []   # результаты всех шагов
 
     for step in range(1, max_steps + 1):
-        # строим промпт
+        # ── строим промпт ──────────────────────────────────────
         prompt = f"""
 === История диалога ===
 {memory.context_block()}
@@ -269,7 +410,7 @@ def agent(user_input: str, memory: ConversationMemory, max_steps: int = 5) -> st
         raw = ask_llm(prompt, system=SYSTEM_PROMPT)
         parsed = parse_json_response(raw)
 
-        # защита от нераспарсенного ответа
+        # ── защита от нераспарсенного ответа ──────────────────
         if parsed is None:
             if step == max_steps:
                 answer = raw.strip()
@@ -283,13 +424,13 @@ def agent(user_input: str, memory: ConversationMemory, max_steps: int = 5) -> st
 
         _log(f"[Шаг {step}] 💭 {thought}")
 
-        # финальный ответ
+        # ── финальный ответ ────────────────────────────────────
         if final_answer:
             _log(f"[Шаг {step}] ✅ Финальный ответ получен")
             memory.add("assistant", final_answer)
             return final_answer
 
-        # параллельный запуск инструментов
+        # ── параллельный запуск инструментов ──────────────────
         if parallel_calls:
             _log(f"[Шаг {step}] ⚡ Параллельный запуск: "
                  f"{[c['tool'] for c in parallel_calls]}")
@@ -304,7 +445,7 @@ def agent(user_input: str, memory: ConversationMemory, max_steps: int = 5) -> st
             # LLM думает, но не вызывает инструменты и не даёт ответа
             _log(f"[Шаг {step}] ⏳ Промежуточное размышление без инструментов")
 
-    #исчерпаны шаги — попросим LLM подвести итог
+    # ── исчерпаны шаги — попросим LLM подвести итог ───────────
     summary_prompt = f"""
 На основе собранных данных:
 {json.dumps(accumulated_results, ensure_ascii=False, indent=2)}
@@ -321,7 +462,9 @@ def agent(user_input: str, memory: ConversationMemory, max_steps: int = 5) -> st
     return answer
 
 
+# ═══════════════════════════════════════════════════════════
 # УТИЛИТЫ
+# ═══════════════════════════════════════════════════════════
 
 def _now() -> str:
     return datetime.now().strftime("%H:%M:%S")
@@ -336,7 +479,7 @@ def _log(msg: str) -> None:
 
 BANNER = """
 ╔══════════════════════════════════════════════════════════╗
-║                  ИИ-Агент «Феникс» v0.2                  ║
+║                   ИИ-Агент «Феникс» v0.2                 ║
 ║   Команды: exit | clear (очистить память) | history      ║
 ╚══════════════════════════════════════════════════════════╝
 """
