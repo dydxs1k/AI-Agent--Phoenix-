@@ -1,9 +1,10 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║           ИИ-АГЕНТ «ФЕНИКС» v0.4  —  Max Performance        ║
+║           ИИ-АГЕНТ «ФЕНИКС» v0.5  —  Max Performance         ║
 ║  ✦ RAG-память  ✦ run_python  ✦ Стриминг  ✦ TTL-кэш  ✦ Web  ║
 ╚══════════════════════════════════════════════════════════════╝
 """
+
 # ──────────────────────────────────────────────────────────────
 #  СТАНДАРТНАЯ БИБЛИОТЕКА
 # ──────────────────────────────────────────────────────────────
@@ -24,11 +25,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-# ──────────────────────────────────────────────────────────────
-#  ВНЕШНИЕ ЗАВИСИМОСТИ
-#  Обязательно : pip install requests duckduckgo-search numpy beautifulsoup4
-#  Опционально : pip install rich
-# ──────────────────────────────────────────────────────────────
 _MISSING: list[str] = []
 
 try:
@@ -82,7 +78,7 @@ except ImportError:
 # ══════════════════════════════════════════════════════════════
 
 OLLAMA_URL    = os.getenv("OLLAMA_URL",  "http://localhost:11434")
-LLM_MODEL     = os.getenv("LLM_MODEL",   "llama3")
+LLM_MODEL = "llama3"
 LLM_TIMEOUT   = int(os.getenv("LLM_TIMEOUT", "90"))
 
 PROFILE_PATH  = Path("agent_profile.json")
@@ -899,7 +895,7 @@ def build_banner(profile: AgentProfile) -> str:
     W = 60
     return "\n".join([
         "╔" + "═" * W + "╗",
-        f"║  🤖  ИИ-Агент «{name}» v{ver}{' ' * max(0, W - 14 - len(name) - len(ver))}║",
+        f"║  🔥  ИИ-Агент «{name}» v{ver}{' ' * max(0, W - 14 - len(name) - len(ver))}║",
         f"║  ✦ {motto[:W-6]:<{W-6}} ║",
         f"║  {'Команды: help | обо мне | память | запомни …':<{W}} ║",
         "╚" + "═" * W + "╝",
