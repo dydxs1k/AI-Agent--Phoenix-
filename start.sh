@@ -23,7 +23,7 @@ fi
 
 # ── Зависимости ──────────────────────────────────────────────
 echo -e "  ${AMBER}[1/3]${NC} Проверка зависимостей..."
-pip install -q rrequests duckduckgo-search numpy beautifulsoup4 fastapi uvicorn rich "uvicorn[standard]" --break-system-packages 2>/dev/null
+pip install -q requests duckduckgo-search numpy beautifulsoup4 fastapi uvicorn rich "uvicorn[standard]" --break-system-packages 2>/dev/null
 echo -e "  ${GREEN}[OK]${NC}"
 
 # ── Запуск Ollama если не запущена ───────────────────────────

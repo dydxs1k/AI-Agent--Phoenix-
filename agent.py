@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║           ИИ-АГЕНТ «ФЕНИКС» v0.5  —  Max Performance         ║
+║           ИИ-АГЕНТ «ФЕНИКС» v0.5 —  Max Performance          ║
 ║  ✦ RAG-память  ✦ run_python  ✦ Стриминг  ✦ TTL-кэш  ✦ Web  ║
 ╚══════════════════════════════════════════════════════════════╝
 """
@@ -25,6 +25,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
+# ──────────────────────────────────────────────────────────────
+#  ВНЕШНИЕ ЗАВИСИМОСТИ
+#  Обязательно : pip install requests duckduckgo-search numpy beautifulsoup4
+#  Опционально : pip install rich
+# ──────────────────────────────────────────────────────────────
 _MISSING: list[str] = []
 
 try:
@@ -78,7 +83,7 @@ except ImportError:
 # ══════════════════════════════════════════════════════════════
 
 OLLAMA_URL    = os.getenv("OLLAMA_URL",  "http://localhost:11434")
-LLM_MODEL = "llama3"
+LLM_MODEL     = os.getenv("LLM_MODEL",   "llama3")
 LLM_TIMEOUT   = int(os.getenv("LLM_TIMEOUT", "90"))
 
 PROFILE_PATH  = Path("agent_profile.json")
@@ -110,7 +115,7 @@ PROFILE_FIELDS: list[tuple[str, str, str]] = [
 
 DEFAULT_PROFILE = {
     "name":        "Феникс",
-    "version":     "0.4",
+    "version":     "0.5",
     "description": "Умный ИИ-агент с RAG-памятью, выполнением кода, браузером и стримингом",
     "author":      "Дима Кузьменко, также известен как Дед либо DyDxS1k/The Disgraced One.",
     "language":    "Русский/Украинский",
