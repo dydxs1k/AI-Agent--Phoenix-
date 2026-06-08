@@ -1,3 +1,9 @@
+"""
+Феникс — веб-сервер
+Запуск: uvicorn server:app --reload --port 8000
+Зависимости: pip install fastapi uvicorn
+"""
+
 import json
 import sys
 import asyncio
@@ -78,6 +84,8 @@ async def set_thoughts_mode(body: dict):
 @app.websocket("/ws/chat")
 async def ws_chat(ws: WebSocket):
     await ws.accept()
+    loop = asyncio.get_event_loop()
+
     try:
         while True:
             data   = await ws.receive_json()
@@ -85,37 +93,48 @@ async def ws_chat(ws: WebSocket):
             if not user_q:
                 continue
 
-            # ── перехватываем _log и ask_llm для стриминга ────
-            log_orig = A._log.__code__
+            await ws.send_json({"event": "user_echo", "text": user_q})
 
-            async def send(event: str, payload: dict):
-                await ws.send_json({"event": event, **payload})
-
-            await send("user_echo", {"text": user_q})
-
-            # патчим _log чтобы шаги шли в браузер
+            # ── очередь для передачи мыслей из потока в async ──
+            thought_queue: asyncio.Queue = asyncio.Queue()
             original_log = A._log
 
             def patched_log(msg: str, kind: str = "grey"):
-                original_log(msg, kind)           # терминал
-                asyncio.get_event_loop().call_soon_threadsafe(
-                    lambda m=msg, k=kind: asyncio.ensure_future(
-                        send("thought", {"text": m, "kind": k})
-                    )
+                original_log(msg, kind)              # терминал как раньше
+                loop.call_soon_threadsafe(
+                    thought_queue.put_nowait,
+                    {"event": "thought", "text": msg, "kind": kind}
                 )
+
             A._log = patched_log
 
-            try:
-                loop   = asyncio.get_event_loop()
-                answer = await loop.run_in_executor(
-                    None,
-                    lambda: A.agent(user_q, _memory, _rag, _profile)
-                )
-            finally:
-                A._log = original_log
+            # ── запускаем агента в отдельном потоке ────────────
+            future = loop.run_in_executor(
+                None,
+                lambda: A.agent(user_q, _memory, _rag, _profile)
+            )
 
-            await send("answer", {"text": answer,
-                                   "name": _profile.get("name")})
+            # ── сливаем мысли в браузер пока агент думает ──────
+            while not future.done():
+                try:
+                    item = await asyncio.wait_for(
+                        thought_queue.get(), timeout=0.1
+                    )
+                    await ws.send_json(item)
+                except asyncio.TimeoutError:
+                    pass
+
+            # ── дочищаем очередь после завершения ──────────────
+            A._log = original_log
+            while not thought_queue.empty():
+                await ws.send_json(thought_queue.get_nowait())
+
+            answer = await future
+            await ws.send_json({
+                "event": "answer",
+                "text":  answer,
+                "name":  _profile.get("name"),
+            })
 
     except WebSocketDisconnect:
         pass
@@ -124,6 +143,8 @@ async def ws_chat(ws: WebSocket):
             await ws.send_json({"event": "error", "text": str(e)})
         except Exception:
             pass
+    finally:
+        A._log = original_log if "original_log" in dir() else A._log
 
 
 # ════════════════════════════════════════════════════════════

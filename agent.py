@@ -83,7 +83,7 @@ except ImportError:
 # ══════════════════════════════════════════════════════════════
 
 OLLAMA_URL    = os.getenv("OLLAMA_URL",  "http://localhost:11434")
-LLM_MODEL     = os.getenv("LLM_MODEL",   "llama3")
+LLM_MODEL = "llama3"
 LLM_TIMEOUT   = int(os.getenv("LLM_TIMEOUT", "90"))
 
 PROFILE_PATH  = Path("agent_profile.json")
