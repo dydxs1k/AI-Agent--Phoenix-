@@ -129,12 +129,22 @@ async def ws_chat(ws: WebSocket):
             while not thought_queue.empty():
                 await ws.send_json(thought_queue.get_nowait())
 
-            answer = await future
-            await ws.send_json({
-                "event": "answer",
-                "text":  answer,
-                "name":  _profile.get("name"),
-            })
+            # ── получаем ответ и отправляем ──────────────────
+            try:
+                answer = await future
+                if not answer:
+                    answer = "⚠️ Агент вернул пустой ответ."
+                await ws.send_json({
+                    "event": "answer",
+                    "text":  str(answer),
+                    "name":  _profile.get("name"),
+                })
+            except Exception as agent_err:
+                await ws.send_json({
+                    "event": "answer",
+                    "text":  f"⚠️ Ошибка агента: {agent_err}",
+                    "name":  _profile.get("name"),
+                })
 
     except WebSocketDisconnect:
         pass
@@ -144,7 +154,10 @@ async def ws_chat(ws: WebSocket):
         except Exception:
             pass
     finally:
-        A._log = original_log if "original_log" in dir() else A._log
+        try:
+            A._log = original_log
+        except NameError:
+            pass
 
 
 # ════════════════════════════════════════════════════════════
