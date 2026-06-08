@@ -1,8 +1,14 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║           ИИ-АГЕНТ «ФЕНИКС» v0.5 —  Max Performance          ║
+║           ИИ-АГЕНТ «ФЕНИКС» v0.4  —  Max Performance        ║
 ║  ✦ RAG-память  ✦ run_python  ✦ Стриминг  ✦ TTL-кэш  ✦ Web  ║
 ╚══════════════════════════════════════════════════════════════╝
+
+Зависимости:
+    pip install requests duckduckgo-search numpy beautifulsoup4
+
+Опционально (для красивого вывода кода):
+    pip install rich
 """
 
 # ──────────────────────────────────────────────────────────────
@@ -412,15 +418,26 @@ def tool_search(query: str, max_results: int = 5) -> dict:
     if hit:
         _log("  [кэш] search")
         return val
-    try:
-        with DDGS() as d:
-            res = [{"title": r["title"], "url": r["href"], "snippet": r["body"]}
-                   for r in d.text(query, max_results=max_results)]
-        result = {"ok": True, "results": res}
-        _CACHE.set("search", {"query": query}, result)
-        return result
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    if DDGS is None:
+        return {"ok": False, "error": "duckduckgo_search не установлен"}
+
+    # Пробуем backends по очереди: api → lite → html
+    for backend in ("api", "lite", "html"):
+        try:
+            with DDGS() as d:
+                hits = list(d.text(query, max_results=max_results,
+                                   backend=backend))
+            if hits:
+                res = [{"title": r.get("title",""), "url": r.get("href",""),
+                        "snippet": r.get("body","")} for r in hits]
+                result = {"ok": True, "results": res, "backend": backend}
+                _CACHE.set("search", {"query": query}, result)
+                return result
+        except Exception:
+            continue
+
+    return {"ok": False,
+            "error": "Поиск недоступен. Проверь интернет-соединение."}
 
 
 # ── Браузер (читает полную страницу) ─────────────────────────
@@ -478,8 +495,9 @@ def tool_write_file(path: str, content: str) -> dict:
 # ── 🐍  run_python — изолированное выполнение кода ──────────
 _PYTHON = sys.executable
 _BANNED = re.compile(
-    r"\b(os\.system|subprocess|shutil\.rmtree|open\s*\(.*[\"\'](w|a)[\"\']\s*\)|"
-    r"__import__|importlib|socket|requests|urllib|httpx|ftplib|smtplib)\b"
+    r"\b(os\.system|subprocess\.call|subprocess\.run|subprocess\.Popen|"
+    r"shutil\.rmtree|shutil\.rmdir|__import__\s*\(|"
+    r"ftplib|smtplib|socket\.connect|socket\.bind)\b"
 )
 
 def tool_run_python(code: str, timeout: int = SANDBOX_TIMEOUT) -> dict:
@@ -720,6 +738,7 @@ def build_system_prompt(profile: AgentProfile) -> str:
 }}
 
 КРИТИЧЕСКИЕ ПРАВИЛА — нарушение недопустимо:
+• ЯЗЫК: всегда отвечай на том же языке, на котором пишет пользователь. Поля "thought", "reason" и "final_answer" — тоже на языке пользователя. Никакого английского если пользователь пишет по-русски или по-украински.
 • НИКОГДА не пиши Python-код в "thought" или "final_answer" — только в run_python.
 • НИКОГДА не симулируй выполнение кода в тексте — всегда вызывай run_python и жди реального stdout.
 • Если пользователь просит написать/запустить/проверить код — ОБЯЗАТЕЛЬНО вызови run_python.
@@ -728,7 +747,9 @@ def build_system_prompt(profile: AgentProfile) -> str:
 • Если ответ готов — заполни final_answer, оставь parallel_calls пустым [].
 • Используй remember когда узнаёшь важный факт о пользователе.
 • Никогда не выходи за пределы JSON.
+• В поле final_answer пиши ТОЛЬКО обычный читаемый текст — никаких dict, JSON, списков Python.
 """
+
 
 
 # ══════════════════════════════════════════════════════════════

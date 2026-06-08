@@ -387,10 +387,12 @@ const API = 'http://localhost:8000'
 const WS  = 'ws://localhost:8000/ws/chat'
 
 let ws = null
-let showThoughts = true
-let isTyping    = false
-let profileData = {}
-let historyExport = []
+let showThoughts   = true
+let isTyping       = false
+let profileData    = {}
+let historyExport  = []
+let _currentLines  = null   // прямая ссылка на активный контейнер мыслей
+let _currentBlock  = null   // прямая ссылка на блок мыслей
 
 // ════════════════════════════════════════
 //  WebSocket
@@ -460,48 +462,47 @@ let _thoughtEl  = null
 
 function startTyping() {
   isTyping = true
-  _thoughtEl  = null
-  _agentMsgEl = null
+
   const wrap = document.createElement('div')
   wrap.className = 'msg agent'
   wrap.id = 'typing-wrap'
   wrap.innerHTML = `
     <div class="msg-avatar">${(profileData.name||'Ф')[0]}</div>
     <div class="msg-body">
-      <div class="thought-block" id="live-thoughts" style="display:none">
-        <button class="thought-toggle open" id="live-toggle">
+      <div class="thought-block" style="display:none">
+        <button class="thought-toggle open">
           <span class="thought-arrow">▶</span> мысли
         </button>
-        <div class="thought-lines" id="live-lines"></div>
+        <div class="thought-lines"></div>
       </div>
       <div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>
     </div>`
   msgs().appendChild(wrap)
-  scrollBottom()
 
-  document.getElementById('live-toggle')?.addEventListener('click', function() {
-    const block = document.getElementById('live-thoughts')
+  // Toggle использует closest — никаких глобалов
+  wrap.querySelector('.thought-toggle').addEventListener('click', function() {
+    const block = this.closest('.thought-block')
     const open  = block.classList.contains('expanded')
-    block.classList.toggle('collapsed', open)
-    block.classList.toggle('expanded', !open)
+    block.classList.toggle('collapsed',  open)
+    block.classList.toggle('expanded',  !open)
     this.classList.toggle('open', !open)
   })
+
+  scrollBottom()
 }
 
 function appendThought(text, kind) {
   if (!isTyping) return
-  const linesEl  = document.getElementById('live-lines')
-  const blockEl  = document.getElementById('live-thoughts')
-  if (!linesEl || !blockEl) return
+  // Ищем текущий активный пузырь напрямую — не через глобал
+  const wrap    = document.getElementById('typing-wrap')
+  if (!wrap) return
+  const blockEl = wrap.querySelector('.thought-block')
+  const linesEl = wrap.querySelector('.thought-lines')
+  if (!blockEl || !linesEl) return
 
   blockEl.style.display = ''
   blockEl.classList.remove('collapsed')
-  blockEl.classList.add('expanded')
-
-  if (!showThoughts) {
-    blockEl.classList.remove('expanded')
-    blockEl.classList.add('collapsed')
-  }
+  blockEl.classList.add(showThoughts ? 'expanded' : 'collapsed')
 
   const line = document.createElement('div')
   line.className = 'thought-line ' + (kind || 'wait')
@@ -511,16 +512,16 @@ function appendThought(text, kind) {
 }
 
 function finalizeAnswer(text, agentName) {
-  isTyping = false
+  isTyping   = false
   const wrap = document.getElementById('typing-wrap')
   if (!wrap) return
-  wrap.removeAttribute('id')
+  wrap.removeAttribute('id')   // ← больше не найдётся по getElementById
 
   const bubble = wrap.querySelector('.msg-bubble')
   bubble.innerHTML = formatText(text)
 
-  const body  = wrap.querySelector('.msg-body')
-  const time  = document.createElement('div')
+  const body = wrap.querySelector('.msg-body')
+  const time = document.createElement('div')
   time.className = 'msg-time'
   time.textContent = now()
   body.appendChild(time)
@@ -543,6 +544,27 @@ function makeMsg(role, label, text) {
 }
 
 function formatText(t) {
+  t = (t || '').trim()
+
+  // Если модель вернула Python dict — конвертируем в читаемый текст
+  if (t.startsWith("{") || t.startsWith("{'")) {
+    try {
+      const json = t.replace(/'/g, '"')
+                    .replace(/True/g,'true').replace(/False/g,'false')
+                    .replace(/None/g,'null')
+      const obj = JSON.parse(json)
+      if (obj.type === 'list' && Array.isArray(obj.value)) {
+        t = obj.value.map(i =>
+          `**${i.name}:** ${Array.isArray(i.value) ? i.value.join(', ') : i.value}`
+        ).join('\n')
+      } else if (obj.final_answer) {
+        t = obj.final_answer
+      } else {
+        t = JSON.stringify(obj, null, 2)
+      }
+    } catch(e) { /* оставляем как есть */ }
+  }
+
   return t
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/`([^`]+)`/g,'<code style="background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px">$1</code>')
