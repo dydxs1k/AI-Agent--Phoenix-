@@ -1,14 +1,8 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║           ИИ-АГЕНТ «ФЕНИКС» v0.4  —  Max Performance        ║
+║           ИИ-АГЕНТ «ФЕНИКС» v0.5  —  Max Performance        ║
 ║  ✦ RAG-память  ✦ run_python  ✦ Стриминг  ✦ TTL-кэш  ✦ Web  ║
 ╚══════════════════════════════════════════════════════════════╝
-
-Зависимости:
-    pip install requests duckduckgo-search numpy beautifulsoup4
-
-Опционально (для красивого вывода кода):
-    pip install rich
 """
 
 # ──────────────────────────────────────────────────────────────
@@ -89,7 +83,7 @@ except ImportError:
 # ══════════════════════════════════════════════════════════════
 
 OLLAMA_URL    = os.getenv("OLLAMA_URL",  "http://localhost:11434")
-LLM_MODEL = "llama3"
+LLM_MODEL     = os.getenv("LLM_MODEL",   "llama3")
 LLM_TIMEOUT   = int(os.getenv("LLM_TIMEOUT", "90"))
 
 PROFILE_PATH  = Path("agent_profile.json")
